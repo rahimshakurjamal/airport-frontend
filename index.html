@@ -154,9 +154,26 @@
 
           // Load data from backend on mount
           useEffect(() => {
+            testBackendConnection();
             loadGuestsFromBackend();
             loadCarsFromBackend();
           }, []);
+
+          const testBackendConnection = async () => {
+            try {
+              console.log('Testing backend connection to:', API_URL);
+              const response = await fetch(`${API_URL}/`);
+              if (response.ok) {
+                const data = await response.json();
+                console.log('Backend connection successful:', data);
+              } else {
+                console.error('Backend connection failed with status:', response.status);
+              }
+            } catch (error) {
+              console.error('Cannot connect to backend:', error);
+              alert(`⚠️ Warning: Cannot connect to backend at ${API_URL}. Please check if backend is running.`);
+            }
+          };
 
           const loadGuestsFromBackend = async () => {
             try {
@@ -235,35 +252,69 @@
           }, [guests]);
 
           const handleAddGuest = async () => {
-            if (newGuest.name && newGuest.flight && newGuest.airline && newGuest.eta) {
-              const airlineInfo = AIRLINES.find(a => a.code === newGuest.airline);
-              const guest = {
-                name: newGuest.name,
-                flight: newGuest.flight,
-                airline: newGuest.airline,
-                airlineName: airlineInfo ? airlineInfo.name : newGuest.airline,
-                origin: newGuest.origin,
-                eta: newGuest.eta,
-                status: 'On Time',
-                carAssigned: null
-              };
+            // Validation
+            if (!newGuest.name) {
+              alert('Please enter guest name');
+              return;
+            }
+            if (!newGuest.flight) {
+              alert('Please enter flight number');
+              return;
+            }
+            if (!newGuest.airline) {
+              alert('Please select an airline');
+              return;
+            }
+            if (!newGuest.origin) {
+              alert('Please enter origin airport');
+              return;
+            }
+            if (!newGuest.eta) {
+              alert('Please enter arrival date and time (both date AND time are required)');
+              return;
+            }
 
-              try {
-                const response = await fetch(`${API_URL}/api/guests`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(guest)
-                });
-                
-                if (response.ok) {
-                  const savedGuest = await response.json();
-                  setGuests([...guests, savedGuest]);
-                  setNewGuest({ name: '', flight: '', airline: '', airlineName: '', origin: '', eta: '' });
-                  setShowAddGuest(false);
-                }
-              } catch (error) {
-                console.error('Error adding guest:', error);
+            console.log('Adding guest with data:', newGuest);
+
+            const airlineInfo = AIRLINES.find(a => a.code === newGuest.airline);
+            const guest = {
+              name: newGuest.name.trim(),
+              flight: newGuest.flight.trim(),
+              airline: newGuest.airline.trim(),
+              airlineName: airlineInfo ? airlineInfo.name : newGuest.airline,
+              origin: newGuest.origin.trim(),
+              eta: newGuest.eta,
+              status: 'On Time',
+              carAssigned: null
+            };
+
+            console.log('Sending to backend:', guest);
+            console.log('Backend URL:', API_URL);
+
+            try {
+              const response = await fetch(`${API_URL}/api/guests`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(guest)
+              });
+              
+              console.log('Response status:', response.status);
+              
+              if (response.ok) {
+                const savedGuest = await response.json();
+                console.log('Guest saved successfully:', savedGuest);
+                setGuests([...guests, savedGuest]);
+                setNewGuest({ name: '', flight: '', airline: '', airlineName: '', origin: '', eta: '' });
+                setShowAddGuest(false);
+                alert('Guest added successfully!');
+              } else {
+                const errorText = await response.text();
+                console.error('Backend error:', errorText);
+                alert(`Error adding guest: ${errorText || 'Unknown error'}`);
               }
+            } catch (error) {
+              console.error('Network error adding guest:', error);
+              alert(`Network error: ${error.message}. Is the backend running?`);
             }
           };
 
