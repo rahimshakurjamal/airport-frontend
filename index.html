@@ -15,17 +15,22 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
     
-    // YOU WILL UPDATE THIS URL AFTER DEPLOYING BACKEND
     const API_URL = 'https://airport-backend-production-89e9.up.railway.app';
 
     function AirportPickupManager() {
       const [guests, setGuests] = useState([]);
       const [cars, setCars] = useState([]);
+      const [nextCarId, setNextCarId] = useState(1);
       const [searchTerm, setSearchTerm] = useState('');
       const [filterStatus, setFilterStatus] = useState('all');
       const [showAddGuest, setShowAddGuest] = useState(false);
+      const [showBulkUpload, setShowBulkUpload] = useState(false);
+      const [uploadStatus, setUploadStatus] = useState('');
       const [expandedGuests, setExpandedGuests] = useState({});
       const [loading, setLoading] = useState(false);
+      const [refreshing, setRefreshing] = useState(false);
+      const [lastRefresh, setLastRefresh] = useState(null);
+      const fileInputRef = useRef(null);
       
       const [newGuest, setNewGuest] = useState({
         name: '',
@@ -62,6 +67,25 @@
         }
       };
 
+      const manualRefreshFlights = async () => {
+        setRefreshing(true);
+        try {
+          const response = await fetch(`${API_URL}/api/update-flight-status`, {
+            method: 'POST'
+          });
+          
+          if (!response.ok) throw new Error('Failed to update flight status');
+          
+          await fetchGuests();
+          setLastRefresh(new Date());
+          alert('Flight statuses updated successfully!');
+        } catch (error) {
+          alert('Error updating flights: ' + error.message);
+        } finally {
+          setRefreshing(false);
+        }
+      };
+
       const getStatusColor = (status) => {
         switch (status) {
           case 'On Time': return 'text-green-600 bg-green-50';
@@ -88,6 +112,164 @@
         if (legs.some(leg => leg.status === 'Delayed')) return 'Delayed';
         if (legs.every(leg => leg.status === 'Landed')) return 'Landed';
         return 'On Time';
+      };
+
+      const autoAssignCars = () => {
+        const unassignedGuests = guests.filter(g => !g.carAssigned && getOverallStatus(g.legs) !== 'Cancelled');
+        const guestsByArrival = {};
+        
+        unassignedGuests.forEach(guest => {
+          const finalLeg = guest.legs[guest.legs.length - 1];
+          const key = `${finalLeg.destination}-${guest.finalETA}`;
+          if (!guestsByArrival[key]) {
+            guestsByArrival[key] = [];
+          }
+          guestsByArrival[key].push(guest);
+        });
+
+        const newCars = [];
+        let carId = nextCarId;
+
+        Object.entries(guestsByArrival).forEach(([key, arrivalGuests]) => {
+          const chunks = [];
+          for (let i = 0; i < arrivalGuests.length; i += 5) {
+            chunks.push(arrivalGuests.slice(i, i + 5));
+          }
+
+          chunks.forEach(chunk => {
+            const finalLeg = chunk[0].legs[chunk[0].legs.length - 1];
+            newCars.push({
+              id: carId,
+              destination: chunk[0].finalDestination,
+              eta: chunk[0].finalETA,
+              flight: finalLeg.flight,
+              passengers: chunk.map(g => g.id),
+              capacity: 5
+            });
+            carId++;
+          });
+        });
+
+        setCars(prev => [...prev, ...newCars]);
+        setNextCarId(carId);
+
+        setGuests(prev => prev.map(guest => {
+          const car = newCars.find(c => c.passengers.includes(guest.id));
+          if (car) {
+            return { ...guest, carAssigned: car.id };
+          }
+          return guest;
+        }));
+
+        alert(`Assigned ${newCars.length} cars for ${unassignedGuests.length} guests!`);
+      };
+
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploadStatus('Processing...');
+        
+        try {
+          const fileExtension = file.name.split('.').pop().toLowerCase();
+          let jsonData = [];
+          
+          if (fileExtension === 'csv') {
+            const text = await file.text();
+            const lines = text.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            jsonData = lines.slice(1).filter(line => line.trim()).map(line => {
+              const values = line.split(',').map(v => v.trim());
+              const row = {};
+              headers.forEach((header, index) => {
+                row[header] = values[index];
+              });
+              return row;
+            });
+          } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+            setUploadStatus('✗ Excel upload requires SheetJS library. Please use CSV format.');
+            setTimeout(() => setUploadStatus(''), 3000);
+            return;
+          } else {
+            setUploadStatus('✗ Please upload a CSV file');
+            setTimeout(() => setUploadStatus(''), 3000);
+            return;
+          }
+
+          const guestMap = {};
+          jsonData.forEach((row) => {
+            const name = (row.name || row.Name || row.NAME || '').trim();
+            if (!name) return;
+
+            if (!guestMap[name]) {
+              guestMap[name] = { name: name, legs: [] };
+            }
+
+            const leg = {
+              flight: row.flight || row.Flight || row.FLIGHT || '',
+              airline: row.airline || row.Airline || row.AIRLINE || '',
+              origin: row.origin || row.Origin || row.ORIGIN || '',
+              destination: row.destination || row.Destination || row.DESTINATION || '',
+              date: row.date || row.Date || row.DATE || '',
+              time: row.time || row.Time || row.TIME || ''
+            };
+
+            if (leg.flight && leg.origin && leg.destination && leg.date) {
+              guestMap[name].legs.push(leg);
+            }
+          });
+
+          let successCount = 0;
+          for (const guestData of Object.values(guestMap)) {
+            if (guestData.legs.length === 0) continue;
+
+            const processedLegs = guestData.legs.map(leg => ({
+              flight: leg.flight,
+              airline: leg.airline || '',
+              origin: leg.origin,
+              destination: leg.destination,
+              eta: leg.time ? `${leg.date}T${leg.time}` : `${leg.date}T00:00`,
+              status: 'On Time'
+            }));
+
+            try {
+              const response = await fetch(`${API_URL}/api/guests`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: guestData.name, legs: processedLegs })
+              });
+
+              if (response.ok) successCount++;
+            } catch (error) {
+              console.error(`Error adding guest ${guestData.name}:`, error);
+            }
+          }
+
+          await fetchGuests();
+          setUploadStatus(`✓ Successfully imported ${successCount} guests`);
+          setShowBulkUpload(false);
+          
+        } catch (error) {
+          setUploadStatus('✗ Error processing file: ' + error.message);
+        }
+
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+
+        setTimeout(() => setUploadStatus(''), 5000);
+      };
+
+      const downloadTemplate = () => {
+        const csvContent = 'name,flight,airline,origin,destination,date,time\nJohn Doe,123,American,JFK,IAH,2025-10-07,14:30\nJane Smith,456,Delta,LAX,ATL,2025-10-07,13:20\nJane Smith,789,Delta,ATL,IAH,2025-10-07,16:45';
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'guest_template.csv';
+        a.click();
+        URL.revokeObjectURL(url);
       };
 
       const addManualGuest = async () => {
@@ -223,12 +405,25 @@
           <div className="max-w-7xl mx-auto">
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Airport Pickup Manager</h1>
-              <p className="text-gray-600">Real-time flight tracking powered by AviationStack API</p>
+              <div className="flex items-center justify-between">
+                <p className="text-gray-600">Real-time flight tracking powered by AviationStack API</p>
+                {lastRefresh && (
+                  <p className="text-xs text-gray-500">
+                    Last updated: {lastRefresh.toLocaleTimeString()}
+                  </p>
+                )}
+              </div>
             </div>
 
             {loading && (
-              <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow-lg">
+              <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow-lg z-50">
                 Loading...
+              </div>
+            )}
+
+            {refreshing && (
+              <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
+                Updating flight statuses...
               </div>
             )}
 
@@ -312,10 +507,35 @@
                   <option value="Landed">Landed</option>
                 </select>
                 <button
-                  onClick={() => setShowAddGuest(!showAddGuest)}
+                  onClick={() => {
+                    setShowAddGuest(!showAddGuest);
+                    setShowBulkUpload(false);
+                  }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   + Add Guest
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBulkUpload(!showBulkUpload);
+                    setShowAddGuest(false);
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  📤 Bulk Upload
+                </button>
+                <button
+                  onClick={manualRefreshFlights}
+                  disabled={refreshing}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  🔄 {refreshing ? 'Updating...' : 'Refresh'}
+                </button>
+                <button
+                  onClick={autoAssignCars}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                >
+                  🚗 Auto Assign
                 </button>
               </div>
 
@@ -424,6 +644,48 @@
                   </div>
                 </div>
               )}
+
+              {showBulkUpload && (
+                <div className="mb-4 p-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    📤 Bulk Upload Guests
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Upload CSV with columns: name, flight, airline, origin, destination, date, time. For multi-leg trips, use the same name on multiple rows.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                    <label className="flex-1">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileUpload}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700 file:cursor-pointer cursor-pointer"
+                      />
+                    </label>
+                    <button
+                      onClick={downloadTemplate}
+                      className="px-4 py-2 bg-white border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50"
+                    >
+                      📥 Download Template
+                    </button>
+                  </div>
+
+                  {uploadStatus && (
+                    <div className={`p-3 rounded-lg text-sm ${uploadStatus.startsWith('✓') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {uploadStatus}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setShowBulkUpload(false)}
+                    className="mt-3 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -472,24 +734,23 @@
                                     <p className="text-sm font-semibold text-gray-900">{guest.name}</p>
                                     <p className="text-xs text-gray-600">
                                       {guest.legs?.length === 1 ? 'Direct flight' : `${guest.legs?.length} legs`} • {finalLeg.flight}
+                                      {guest.carAssigned && ` • 🚗 Car #${guest.carAssigned}`}
                                     </p>
                                   </div>
                                   <div className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(overallStatus)}`}>
                                     {getStatusIcon(overallStatus)} {overallStatus}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 ml-2">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteGuest(guest.id);
-                                    }}
-                                    className="p-1.5 hover:bg-red-100 rounded transition-colors text-red-600"
-                                    title="Delete guest"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteGuest(guest.id);
+                                  }}
+                                  className="p-1.5 hover:bg-red-100 rounded transition-colors text-red-600 ml-2"
+                                  title="Delete guest"
+                                >
+                                  🗑️
+                                </button>
                               </div>
                             </div>
                             
@@ -533,6 +794,53 @@
                 </div>
               )}
             </div>
+
+            {cars.length > 0 && (
+              <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+                  🚗 Car Assignments ({cars.length} vehicles)
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {cars.map(car => {
+                    const carGuests = car.passengers.map(id => guests.find(g => g.id === id)).filter(Boolean);
+                    const hasIssues = carGuests.some(g => ['Cancelled', 'Delayed'].includes(getOverallStatus(g.legs)));
+                    
+                    return (
+                      <div key={car.id} className={`border-2 rounded-lg p-3 ${hasIssues ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              🚗
+                            </div>
+                            <h3 className="font-bold text-gray-900">#{car.id}</h3>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded ${car.passengers.length === 5 ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {car.passengers.length}/5
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600 mb-2 space-y-0.5">
+                          <p className="font-medium">{car.destination}</p>
+                          <p>{new Date(car.eta).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <div className="space-y-1">
+                          {carGuests.map(guest => {
+                            const status = getOverallStatus(guest.legs);
+                            return (
+                              <div key={guest.id} className="flex items-center justify-between">
+                                <p className="text-xs text-gray-700 truncate flex-1">• {guest.name}</p>
+                                {(status === 'Delayed' || status === 'Cancelled') && (
+                                  <span className="text-xs ml-1">{status === 'Cancelled' ? '🚫' : '⚠️'}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -541,6 +849,4 @@
     ReactDOM.render(<AirportPickupManager />, document.getElementById('root'));
   </script>
 </body>
-
 </html>
-
