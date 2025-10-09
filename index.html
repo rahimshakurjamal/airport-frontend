@@ -159,6 +159,18 @@
             loadCarsFromBackend();
           }, []);
 
+          // Auto-refresh flight statuses when guests are loaded
+          useEffect(() => {
+            if (guests.length > 0) {
+              // Auto-refresh flight statuses on page load (after 2 seconds delay)
+              const timer = setTimeout(() => {
+                console.log('Auto-refreshing flight statuses on page load...');
+                refreshFlightStatuses();
+              }, 2000);
+              return () => clearTimeout(timer);
+            }
+          }, [guests.length > 0 ? 'loaded' : 'empty']);
+
           const testBackendConnection = async () => {
             try {
               console.log('Testing backend connection to:', API_URL);
@@ -177,10 +189,14 @@
 
           const loadGuestsFromBackend = async () => {
             try {
+              console.log('Loading guests from backend...');
               const response = await fetch(`${API_URL}/api/guests`);
               if (response.ok) {
                 const data = await response.json();
+                console.log('Loaded guests:', data);
                 setGuests(data);
+              } else {
+                console.error('Failed to load guests, status:', response.status);
               }
             } catch (error) {
               console.error('Error loading guests:', error);
@@ -189,14 +205,18 @@
 
           const loadCarsFromBackend = async () => {
             try {
+              console.log('Loading cars from backend...');
               const response = await fetch(`${API_URL}/api/cars`);
               if (response.ok) {
                 const data = await response.json();
+                console.log('Loaded cars:', data);
                 setCars(data);
                 if (data.length > 0) {
                   const maxId = Math.max(...data.map(c => c.id));
                   setNextCarId(maxId + 1);
                 }
+              } else {
+                console.error('Failed to load cars, status:', response.status);
               }
             } catch (error) {
               console.error('Error loading cars:', error);
@@ -242,14 +262,6 @@
             }
             setIsRefreshing(false);
           };
-
-          // Auto-refresh every 5 minutes
-          useEffect(() => {
-            if (guests.length > 0) {
-              const interval = setInterval(refreshFlightStatuses, 300000);
-              return () => clearInterval(interval);
-            }
-          }, [guests]);
 
           const handleAddGuest = async () => {
             // Validation
@@ -778,9 +790,6 @@
                   </div>
                 </div>
 
-                {/* Modals and other JSX continues... */}
-                {/* (Truncated for length - same structure continues with all modals and flight dashboard) */}
-                
                 {/* Bulk Upload Modal */}
                 {showBulkUpload && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -837,71 +846,95 @@
                         {editingGuest ? 'Edit Guest' : 'Add New Guest'}
                       </h3>
                       <div className="space-y-3">
-                        <input
-                          type="text"
-                          placeholder="Guest Name"
-                          value={editingGuest ? editingGuest.name : newGuest.name}
-                          onChange={(e) => editingGuest 
-                            ? setEditingGuest({...editingGuest, name: e.target.value})
-                            : setNewGuest({...newGuest, name: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Flight Number (e.g., AA123)"
-                          value={editingGuest ? editingGuest.flight : newGuest.flight}
-                          onChange={(e) => editingGuest
-                            ? setEditingGuest({...editingGuest, flight: e.target.value.toUpperCase()})
-                            : setNewGuest({...newGuest, flight: e.target.value.toUpperCase()})
-                          }
-                          className="w-full px-4 py-2 border rounded-lg"
-                        />
-                        <select
-                          value={editingGuest ? editingGuest.airline : newGuest.airline}
-                          onChange={(e) => editingGuest
-                            ? setEditingGuest({...editingGuest, airline: e.target.value})
-                            : setNewGuest({...newGuest, airline: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border rounded-lg"
-                        >
-                          <option value="">Select Airline</option>
-                          {AIRLINES.map(airline => (
-                            <option key={airline.code} value={airline.code}>
-                              {airline.code} - {airline.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Origin Airport (e.g., JFK)"
-                          value={editingGuest ? editingGuest.origin : newGuest.origin}
-                          onChange={(e) => editingGuest
-                            ? setEditingGuest({...editingGuest, origin: e.target.value.toLowerCase()})
-                            : setNewGuest({...newGuest, origin: e.target.value.toLowerCase()})
-                          }
-                          className="w-full px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="datetime-local"
-                          value={editingGuest ? editingGuest.eta : newGuest.eta}
-                          onChange={(e) => editingGuest
-                            ? setEditingGuest({...editingGuest, eta: e.target.value})
-                            : setNewGuest({...newGuest, eta: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border rounded-lg"
-                        />
-                        {editingGuest && (
-                          <select
-                            value={editingGuest.status}
-                            onChange={(e) => setEditingGuest({...editingGuest, status: e.target.value})}
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Guest Name *</label>
+                          <input
+                            type="text"
+                            placeholder="Guest Name"
+                            value={editingGuest ? editingGuest.name : newGuest.name}
+                            onChange={(e) => editingGuest 
+                              ? setEditingGuest({...editingGuest, name: e.target.value})
+                              : setNewGuest({...newGuest, name: e.target.value})
+                            }
                             className="w-full px-4 py-2 border rounded-lg"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Flight Number *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., 1143 (without airline code)"
+                            value={editingGuest ? editingGuest.flight : newGuest.flight}
+                            onChange={(e) => editingGuest
+                              ? setEditingGuest({...editingGuest, flight: e.target.value.toUpperCase()})
+                              : setNewGuest({...newGuest, flight: e.target.value.toUpperCase()})
+                            }
+                            className="w-full px-4 py-2 border rounded-lg"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Airline *</label>
+                          <select
+                            value={editingGuest ? editingGuest.airline : newGuest.airline}
+                            onChange={(e) => editingGuest
+                              ? setEditingGuest({...editingGuest, airline: e.target.value})
+                              : setNewGuest({...newGuest, airline: e.target.value})
+                            }
+                            className="w-full px-4 py-2 border rounded-lg"
+                            required
                           >
-                            <option value="On Time">On Time</option>
-                            <option value="Delayed">Delayed</option>
-                            <option value="Cancelled">Cancelled</option>
-                            <option value="Landed">Landed</option>
+                            <option value="">Select Airline</option>
+                            {AIRLINES.map(airline => (
+                              <option key={airline.code} value={airline.code}>
+                                {airline.code} - {airline.name}
+                              </option>
+                            ))}
                           </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Origin Airport *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., DCA, JFK, LAX"
+                            value={editingGuest ? editingGuest.origin : newGuest.origin}
+                            onChange={(e) => editingGuest
+                              ? setEditingGuest({...editingGuest, origin: e.target.value.toLowerCase()})
+                              : setNewGuest({...newGuest, origin: e.target.value.toLowerCase()})
+                            }
+                            className="w-full px-4 py-2 border rounded-lg"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Arrival Date & Time *</label>
+                          <input
+                            type="datetime-local"
+                            value={editingGuest ? editingGuest.eta : newGuest.eta}
+                            onChange={(e) => editingGuest
+                              ? setEditingGuest({...editingGuest, eta: e.target.value})
+                              : setNewGuest({...newGuest, eta: e.target.value})
+                            }
+                            className="w-full px-4 py-2 border rounded-lg"
+                            required
+                          />
+                          <p className="text-xs text-gray-500 mt-1">⚠️ Make sure to set BOTH date and time</p>
+                        </div>
+                        {editingGuest && (
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Flight Status</label>
+                            <select
+                              value={editingGuest.status}
+                              onChange={(e) => setEditingGuest({...editingGuest, status: e.target.value})}
+                              className="w-full px-4 py-2 border rounded-lg"
+                            >
+                              <option value="On Time">On Time</option>
+                              <option value="Delayed">Delayed</option>
+                              <option value="Cancelled">Cancelled</option>
+                              <option value="Landed">Landed</option>
+                            </select>
+                          </div>
                         )}
                       </div>
                       <div className="flex gap-3 mt-4">
