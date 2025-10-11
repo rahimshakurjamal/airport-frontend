@@ -44,7 +44,6 @@
             flight: '',
             airline: '',
             origin: '',
-            destination: '',
             date: '',
             time: ''
           });
@@ -74,7 +73,10 @@
           };
 
           const addGuest = async () => {
-            if (!newGuest.name || !newGuest.flight) return;
+            if (!newGuest.name || !newGuest.flight) {
+              alert('Please fill in Name and Flight Number');
+              return;
+            }
             
             try {
               const response = await fetch(`${API_URL}/api/guests`, {
@@ -87,12 +89,17 @@
               });
               
               if (response.ok) {
-                setNewGuest({ name: '', phone: '', flight: '', airline: '', origin: '', destination: '', date: '', time: '' });
+                setNewGuest({ name: '', phone: '', flight: '', airline: '', origin: '', date: '', time: '' });
                 setShowAddForm(false);
                 fetchGuests();
+                alert('Guest added successfully!');
+              } else {
+                const error = await response.json();
+                alert(`Error: ${error.error || 'Failed to add guest'}`);
               }
             } catch (error) {
               console.error('Error adding guest:', error);
+              alert('Error adding guest. Check console for details.');
             }
           };
 
@@ -116,6 +123,8 @@
           };
 
           const deleteGuest = async (id) => {
+            if (!confirm('Are you sure you want to delete this guest?')) return;
+            
             try {
               await fetch(`${API_URL}/api/guests/${id}`, { method: 'DELETE' });
               fetchGuests();
@@ -128,6 +137,7 @@
             try {
               await fetch(`${API_URL}/api/assign-cars`, { method: 'POST' });
               fetchGuests();
+              alert('Cars assigned successfully!');
             } catch (error) {
               console.error('Error assigning cars:', error);
             }
@@ -148,6 +158,7 @@
               
               if (response.ok) {
                 fetchGuests();
+                alert('Bulk upload successful!');
               }
             } catch (error) {
               console.error('Error uploading file:', error);
@@ -346,13 +357,6 @@
                         className="px-4 py-2 border border-gray-300 rounded-lg"
                       />
                       <input
-                        type="text"
-                        placeholder="Destination (e.g., IAH)"
-                        value={newGuest.destination}
-                        onChange={(e) => setNewGuest({...newGuest, destination: e.target.value})}
-                        className="px-4 py-2 border border-gray-300 rounded-lg"
-                      />
-                      <input
                         type="date"
                         value={newGuest.date}
                         onChange={(e) => setNewGuest({...newGuest, date: e.target.value})}
@@ -404,7 +408,6 @@
                               <h3 className="text-2xl font-bold">{flight}</h3>
                               <p className="text-gray-600">
                                 {firstGuest.airline} • From {firstGuest.origin}
-                                {firstGuest.destination && ` to ${firstGuest.destination}`}
                               </p>
                               <p className="text-sm text-gray-500">
                                 {new Date(firstGuest.eta).toLocaleString('en-US', {
