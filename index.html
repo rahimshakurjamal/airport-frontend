@@ -14,7 +14,18 @@
 
     <script type="text/babel">
         const { useState } = React;
-        const { Users, CheckCircle, XCircle, Clock, Plane, Car, RefreshCw, Upload, Plus, Shuffle } = lucide;
+
+        // Simple icon components
+        const Users = () => <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
+        const CheckCircle = ({className = "w-5 h-5"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const XCircle = ({className = "w-5 h-5"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const Clock = ({className = "w-5 h-5"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const Plane = ({className = "w-6 h-6"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>;
+        const Car = () => <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>;
+        const RefreshCw = ({className = "w-4 h-4"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
+        const Upload = ({className = "w-4 h-4"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
+        const Plus = ({className = "w-4 h-4"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
+        const Shuffle = ({className = "w-4 h-4"}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
 
         function AirportPickupManager() {
           const API_URL = 'https://airport-backend-production-89e9.up.railway.app';
@@ -169,14 +180,12 @@
           return (
             <div className="min-h-screen bg-gray-50 p-6">
               <div className="max-w-7xl mx-auto">
-                {/* Header */}
                 <div className="mb-8">
                   <h1 className="text-4xl font-bold text-gray-900 mb-2">Airport Pickup Manager</h1>
                   <p className="text-gray-600">Real-time flight tracking powered by AviationStack API</p>
                   <p className="text-sm text-gray-500 mt-1">Last updated: {lastUpdated}</p>
                 </div>
 
-                {/* Stats Cards */}
                 <div className="grid grid-cols-6 gap-4 mb-6">
                   <div className="bg-white border-l-4 border-blue-500 p-4 rounded-lg shadow-sm">
                     <div className="flex items-center justify-between">
@@ -184,7 +193,7 @@
                         <p className="text-sm text-gray-600">Total</p>
                         <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
                       </div>
-                      <Users className="w-8 h-8 text-blue-500" />
+                      <Users />
                     </div>
                   </div>
 
@@ -234,12 +243,11 @@
                         <p className="text-sm text-gray-600">Cars</p>
                         <p className="text-3xl font-bold text-gray-900">{stats.cars}</p>
                       </div>
-                      <Car className="w-8 h-8 text-purple-500" />
+                      <Car />
                     </div>
                   </div>
                 </div>
 
-                {/* Controls */}
                 <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
                   <div className="flex items-center gap-4">
                     <input
@@ -266,12 +274,12 @@
                       onClick={() => setShowAddForm(!showAddForm)}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus />
                       Add Guest
                     </button>
 
                     <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition cursor-pointer">
-                      <Upload className="w-4 h-4" />
+                      <Upload />
                       Bulk Upload
                       <input type="file" accept=".csv,.xlsx" onChange={handleBulkUpload} className="hidden" />
                     </label>
@@ -281,7 +289,7 @@
                       disabled={loading}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
                     >
-                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={loading ? 'animate-spin' : ''} />
                       Refresh
                     </button>
 
@@ -289,13 +297,12 @@
                       onClick={autoAssignCars}
                       className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
                     >
-                      <Shuffle className="w-4 h-4" />
+                      <Shuffle />
                       Auto Assign
                     </button>
                   </div>
                 </div>
 
-                {/* Add Guest Form */}
                 {showAddForm && (
                   <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
                     <h3 className="text-lg font-semibold mb-4">Add New Guest</h3>
@@ -375,7 +382,6 @@
                   </div>
                 )}
 
-                {/* Flights Dashboard */}
                 <div className="mb-4">
                   <h2 className="text-2xl font-bold text-gray-900">Flights Dashboard</h2>
                 </div>
@@ -393,7 +399,7 @@
                       <div key={flight} className={`${statusColor} border-2 rounded-lg p-6`}>
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <Plane className="w-6 h-6" />
+                            <Plane />
                             <div>
                               <h3 className="text-2xl font-bold">{flight}</h3>
                               <p className="text-gray-600">
@@ -505,11 +511,6 @@
         }
 
         ReactDOM.render(<AirportPickupManager />, document.getElementById('root'));
-    </script>
-    
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script>
-        lucide.createIcons();
     </script>
 </body>
 </html>
